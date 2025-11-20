@@ -3,24 +3,66 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+import requests
+from bs4 import BeautifulSoup
+
 def get_jobs():
-    jobs = [
-        {
-            "title": "Data Science Intern",
-            "company": "ABC Corp",
-            "location": "Bangalore",
-            "link": "https://example.com/job1",
-            "summary": "Entry-level role working with ML models."
-        },
-        {
-            "title": "Java Developer Fresher",
-            "company": "XYZ Tech",
-            "location": "Hyderabad",
-            "link": "https://example.com/job2",
-            "summary": "Work on backend Java services."
-        }
-    ]
+
+    jobs = []
+
+    # 1. RemoteOK API (Real jobs)
+    try:
+        ro = requests.get("https://remoteok.com/api").json()
+        for job in ro:
+            if isinstance(job, dict):
+                title = job.get("position", "")
+                if any(k.lower() in title.lower() for k in ["java", "frontend", "data"]):
+                    jobs.append({
+                        "title": job.get("position", "No title"),
+                        "company": job.get("company", "Unknown"),
+                        "location": job.get("location", "Remote"),
+                        "link": job.get("url", "#"),
+                        "summary": job.get("description", "")[:150] + "..."
+                    })
+    except:
+        pass
+
+    # 2. Remotive API (Good for software/dev roles)
+    try:
+        rem = requests.get("https://remotive.com/api/remote-jobs").json()
+        for job in rem["jobs"]:
+            title = job["title"]
+            if any(k.lower() in title.lower() for k in ["java", "frontend", "data"]):
+                jobs.append({
+                    "title": job["title"],
+                    "company": job["company_name"],
+                    "location": job["candidate_required_location"],
+                    "link": job["url"],
+                    "summary": job["description"][:150] + "..."
+                })
+    except:
+        pass
+
+    # 3. Wellfound (AngelList) Startup Jobs (RSS)
+    try:
+        feed_url = "https://wellfound.com/feed"
+        feed = requests.get(feed_url).text
+        soup = BeautifulSoup(feed, "xml")
+        for item in soup.find_all("item"):
+            title = item.title.text
+            if any(k.lower() in title.lower() for k in ["java", "frontend", "data"]):
+                jobs.append({
+                    "title": title,
+                    "company": "Startup (Wellfound)",
+                    "location": "Unknown",
+                    "link": item.link.text,
+                    "summary": item.description.text[:150] + "..."
+                })
+    except:
+        pass
+
     return jobs
+
 
 def send_email(from_email, password, to_email, jobs):
     message = MIMEMultipart("alternative")
